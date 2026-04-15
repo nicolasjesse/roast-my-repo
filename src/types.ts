@@ -12,4 +12,3 @@ export interface GitHubFile {
   path: string;
   content: string;
 }
-const x: string = 123;
