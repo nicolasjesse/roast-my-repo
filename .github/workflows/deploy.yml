@@ -1,0 +1,84 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Run tests
+        run: npm test
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Package Lambda
+        run: cd dist && zip -r ../function.zip . && cd ..
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Deploy to Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name roast-my-repo \
+            --zip-file fileb://function.zip \
+            --region us-east-1
+
+      - name: Wait for Lambda to finish updating
+        run: |
+          aws lambda wait function-updated \
+            --function-name roast-my-repo \
+            --region us-east-1
+
+      - name: Smoke test
+        env:
+          API_URL: ${{ secrets.API_URL }}
+        run: |
+          echo "Sending smoke test request..."
+          RESPONSE=$(curl -s -X POST "$API_URL/roast" \
+            -H "Content-Type: application/json" \
+            -d '{"repo_url":"https://github.com/nicholasgasior/gsfmt"}' \
+            --max-time 60)
+
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | jq '.repo'
+          echo "Smoke test passed."

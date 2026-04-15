@@ -1,0 +1,13 @@
+node_modules/
+dist/
+function.zip
+.env
+.env.local
+.DS_Store
+.vscode/
+*.log
+npm-debug.log*
+
+# Claude / personal docs
+CLAUDE.md
+docs/
